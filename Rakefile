@@ -1,3 +1,24 @@
+namespace :db do
+  task :create do
+    # config = ARTest.config['connections']['postgresql']
+    %x( createdb -E UTF8 -T template0 que-test )
+    # %x( createdb -E UTF8 -T template0 #{config['arunit2']['database']} )
+
+    # # prepare hstore
+    # if %x( createdb --version ).strip.gsub(/(.*)(\d\.\d\.\d)$/, "\\2") < "9.1.0"
+    #   puts "Please prepare hstore data type. See http://www.postgresql.org/docs/9.0/static/hstore.html"
+    # end
+  end
+
+  desc 'Drop the PostgreSQL test databases'
+  task :drop do
+     %x( dropdb que-test )
+  end
+
+  # desc 'Rebuild the PostgreSQL test databases'
+  # task :rebuild => [:drop, :build]
+end
+
 task :default do
   task_start = Time.now
 
