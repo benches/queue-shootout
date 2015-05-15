@@ -169,17 +169,20 @@ namespace :benches do
       puts
     end
 
+    things = []
     peaks.each do |queue, array|
       sum    = array.inject(:+)
       avg    = sum / array.length
       stddev = Math.sqrt(array.inject(0){|total, t| total + (t - avg)**2 } / (array.length - 1))
 
+      things << {queue: queue, sum: sum, avg: avg, stddev: stddev}
+
       puts "#{queue} jobs per second: avg = #{avg.round(1)}, max = #{array.max.round(1)}, min = #{array.min.round(1)}, stddev = #{stddev.round(1)}"
     end
-    response = Net::HTTP.post_form(uri, {message: "stopped"})
+    # response = Net::HTTP.post_form(uri, {message: "stopped"})
 
     puts
     puts "Total runtime: #{(Time.now - task_start).round(1)} seconds"
-    response = Net::HTTP.post_form(uri, {message: "#{(Time.now - task_start).round(1)} seconds"})
+    response = Net::HTTP.post_form(uri, {total_time: "#{(Time.now - task_start).round(1)} seconds", results: things})
   end
 end
