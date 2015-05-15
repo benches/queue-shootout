@@ -22,17 +22,21 @@ namespace :db do
   # task :rebuild => [:drop, :build]
 end
 
+# namespace :benches do
+#   task :press do
+#     uri = URI.parse("http://requestb.in/18tdza31")
+#     task :default
+#     response = Net::HTTP.post_form(uri, {metrics: "hai"})
+#     STDOUT.puts response.inspect
+#   end
+# end
+
+# task :default do
 namespace :benches do
   task :press do
-    uri = URI.parse("http://requestb.in/18tdza31")
-    task :default
-    response = Net::HTTP.post_form(uri, {metrics: "hai"})
-    STDOUT.puts response.inspect
-  end
-end
-
-task :default do
   task_start = Time.now
+  uri = URI.parse("http://requestb.in/18tdza31")
+  response = Net::HTTP.post_form(uri, {message: "started"})
 
   require 'uri'
   require 'bundler'
@@ -172,7 +176,9 @@ task :default do
 
     puts "#{queue} jobs per second: avg = #{avg.round(1)}, max = #{array.max.round(1)}, min = #{array.min.round(1)}, stddev = #{stddev.round(1)}"
   end
+  response = Net::HTTP.post_form(uri, {message: "stopped"})
 
   puts
   puts "Total runtime: #{(Time.now - task_start).round(1)} seconds"
+  response = Net::HTTP.post_form(uri, {message: "#{(Time.now - task_start).round(1)} seconds"})
 end
