@@ -1,5 +1,6 @@
 require 'net/http'
 require 'uri'
+require 'json'
 
 namespace :db do
   task :create do
@@ -175,14 +176,18 @@ namespace :benches do
       avg    = sum / array.length
       stddev = Math.sqrt(array.inject(0){|total, t| total + (t - avg)**2 } / (array.length - 1))
 
-      things << {queue: queue, sum: sum, avg: avg, stddev: stddev}
+      things << {queue: queue, max: array.max.round(1), sum: sum, avg: avg.round(1), stddev: stddev.round(1)}
 
       puts "#{queue} jobs per second: avg = #{avg.round(1)}, max = #{array.max.round(1)}, min = #{array.min.round(1)}, stddev = #{stddev.round(1)}"
     end
     # response = Net::HTTP.post_form(uri, {message: "stopped"})
-
-    puts
-    puts "Total runtime: #{(Time.now - task_start).round(1)} seconds"
-    response = Net::HTTP.post_form(uri, {total_time: "#{(Time.now - task_start).round(1)} seconds", results: things})
+    req = Net::HTTP::Post.new(uri, initheader = {'Content-Type' =>'application/json'})
+    req.body = {total_time: "#{(Time.now - task_start).round(1)} seconds", results: things}.to_json
+    res = Net::HTTP.start(uri.hostname, uri.port) do |http|
+      http.request(req)
+    end
+    # puts
+    # puts "Total runtime: #{(Time.now - task_start).round(1)} seconds"
+    # response = Net::HTTP.post_form(uri, )
   end
 end
