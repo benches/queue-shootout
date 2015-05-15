@@ -25,6 +25,7 @@ end
 namespace :benches do
   task :press do
     uri = URI.parse("http://requestb.in/18tdza31")
+    task :default
     response = Net::HTTP.post_form(uri, {metrics: "hai"})
     STDOUT.puts response.inspect
   end
