@@ -1,3 +1,6 @@
+require 'net/http'
+require 'uri'
+
 namespace :db do
   task :create do
     # config = ARTest.config['connections']['postgresql']
@@ -17,6 +20,14 @@ namespace :db do
 
   # desc 'Rebuild the PostgreSQL test databases'
   # task :rebuild => [:drop, :build]
+end
+
+namespace :benches do
+  task :press do
+    uri = URI.parse("http://requestb.in/18tdza31")
+    response = Net::HTTP.post_form(uri, {metrics: "hai"})
+    STDOUT.puts response.inspect
+  end
 end
 
 task :default do
