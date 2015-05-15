@@ -1,42 +1,21 @@
 require 'net/http'
 require 'uri'
+require 'json'
 
 namespace :db do
   task :create do
-    # config = ARTest.config['connections']['postgresql']
     %x( createdb -E UTF8 -T template0 que-test )
-    # %x( createdb -E UTF8 -T template0 #{config['arunit2']['database']} )
-
-    # # prepare hstore
-    # if %x( createdb --version ).strip.gsub(/(.*)(\d\.\d\.\d)$/, "\\2") < "9.1.0"
-    #   puts "Please prepare hstore data type. See http://www.postgresql.org/docs/9.0/static/hstore.html"
-    # end
   end
 
   desc 'Drop the PostgreSQL test databases'
   task :drop do
      %x( dropdb que-test )
   end
-
-  # desc 'Rebuild the PostgreSQL test databases'
-  # task :rebuild => [:drop, :build]
 end
 
-# namespace :benches do
-#   task :press do
-#     uri = URI.parse("http://requestb.in/18tdza31")
-#     task :default
-#     response = Net::HTTP.post_form(uri, {metrics: "hai"})
-#     STDOUT.puts response.inspect
-#   end
-# end
-
-# task :default do
 namespace :benches do
   task :press do
     task_start = Time.now
-    uri = URI.parse("http://requestb.in/18tdza31")
-    response = Net::HTTP.post_form(uri, {message: "started"})
 
     require 'uri'
     require 'bundler'
@@ -85,16 +64,6 @@ namespace :benches do
 
     parent_pid = Process.pid
     define_method(:parent?) { parent_pid == Process.pid }
-
-    puts "Benchmarking #{QUEUES.keys.join(', ')}"
-    puts "  QUIET = #{QUIET}"
-    puts "  ITERATIONS = #{ITERATIONS}"
-    puts "  DATABASE_URL = #{DATABASE_URL}"
-    puts "  JOB_COUNT = #{JOB_COUNT}"
-    puts "  TEST_PERIOD = #{TEST_PERIOD}"
-    puts "  WARMUP_PERIOD = #{WARMUP_PERIOD}"
-    puts "  SYNCHRONOUS_COMMIT = #{SYNCHRONOUS_COMMIT}"
-    puts
 
     peaks = {}
 
@@ -166,23 +135,21 @@ namespace :benches do
         end
       end
 
-      puts
     end
 
-    things = []
-    peaks.each do |queue, array|
+    results = peaks.map do |queue, array|
       sum    = array.inject(:+)
       avg    = sum / array.length
       stddev = Math.sqrt(array.inject(0){|total, t| total + (t - avg)**2 } / (array.length - 1))
 
-      things << {queue: queue, sum: sum, avg: avg, stddev: stddev}
-
-      puts "#{queue} jobs per second: avg = #{avg.round(1)}, max = #{array.max.round(1)}, min = #{array.min.round(1)}, stddev = #{stddev.round(1)}"
+      {queue: queue, max: array.max.round(1), sum: sum.round(1), avg: avg.round(1), stddev: stddev.round(1)}
     end
-    # response = Net::HTTP.post_form(uri, {message: "stopped"})
 
-    puts
-    puts "Total runtime: #{(Time.now - task_start).round(1)} seconds"
-    response = Net::HTTP.post_form(uri, {total_time: "#{(Time.now - task_start).round(1)} seconds", results: things})
+    uri = URI.parse("http://requestb.in/18tdza31")
+    req = Net::HTTP::Post.new(uri, initheader = {'Content-Type' =>'application/json'})
+    req.body = {run_time: "#{(Time.now - task_start).round(1)} seconds", results: things}.to_json
+    res = Net::HTTP.start(uri.hostname, uri.port) do |http|
+      http.request(req)
+    end
   end
 end
