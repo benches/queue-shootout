@@ -1,46 +1,21 @@
-require 'net/http'
-require 'uri'
-require 'json'
-
 namespace :db do
   task :create do
-    # config = ARTest.config['connections']['postgresql']
     %x( createdb -E UTF8 -T template0 que-test )
-    # %x( createdb -E UTF8 -T template0 #{config['arunit2']['database']} )
-
-    # # prepare hstore
-    # if %x( createdb --version ).strip.gsub(/(.*)(\d\.\d\.\d)$/, "\\2") < "9.1.0"
-    #   puts "Please prepare hstore data type. See http://www.postgresql.org/docs/9.0/static/hstore.html"
-    # end
   end
 
   desc 'Drop the PostgreSQL test databases'
   task :drop do
      %x( dropdb que-test )
   end
-
-  # desc 'Rebuild the PostgreSQL test databases'
-  # task :rebuild => [:drop, :build]
 end
 
-# namespace :benches do
-#   task :press do
-#     uri = URI.parse("http://requestb.in/18tdza31")
-#     task :default
-#     response = Net::HTTP.post_form(uri, {metrics: "hai"})
-#     STDOUT.puts response.inspect
-#   end
-# end
-
-# task :default do
 namespace :benches do
   task :press do
     task_start = Time.now
-    uri = URI.parse("http://requestb.in/18tdza31")
-    response = Net::HTTP.post_form(uri, {message: "started"})
 
     require 'uri'
     require 'bundler'
+    require './bench'
     Bundler.require
 
     QUIET              = !!ENV['QUIET']
@@ -74,7 +49,8 @@ namespace :benches do
     $redis = Redis.new :url    => ENV['REDIS_URL'],
       :driver => :hiredis
 
-    %w(delayed_job queue_classic que).each { |queue| require "./queues/#{queue}" }
+    # %w(delayed_job queue_classic que).each { |queue| require "./queues/#{queue}" }
+    require './queues/que'
 
     $pg.async_exec "ANALYZE"
 
@@ -87,27 +63,13 @@ namespace :benches do
     parent_pid = Process.pid
     define_method(:parent?) { parent_pid == Process.pid }
 
-    puts "Benchmarking #{QUEUES.keys.join(', ')}"
-    puts "  QUIET = #{QUIET}"
-    puts "  ITERATIONS = #{ITERATIONS}"
-    puts "  DATABASE_URL = #{DATABASE_URL}"
-    puts "  JOB_COUNT = #{JOB_COUNT}"
-    puts "  TEST_PERIOD = #{TEST_PERIOD}"
-    puts "  WARMUP_PERIOD = #{WARMUP_PERIOD}"
-    puts "  SYNCHRONOUS_COMMIT = #{SYNCHRONOUS_COMMIT}"
-    puts
-
     peaks = {}
 
     ITERATIONS.times do |i|
-      puts "Iteration ##{i + 1}:" unless QUIET
-
       QUEUES.each do |queue, procs|
         peaks[queue] ||= []
         worker_count   = 1
         rates          = []
-
-        print "#{queue}: " unless QUIET
 
         loop do
           $redis.flushdb
@@ -147,47 +109,38 @@ namespace :benches do
             exit
           end
 
-          print "#{rates.count} => #{rates.last.round(1)}" unless QUIET
-
           # If the peak productivity was not in the past three data points,
           # assume the slope is trending down and we're done.
           peak   = rates.max
           recent = rates.last(5)
           if recent.length == 5 && !recent.include?(peak)
-            puts unless QUIET
-            puts "#{queue}: Peaked at #{rates.index(peak) + 1} workers with #{peak.round(1)} jobs/second\n" unless QUIET
-
             peaks[queue] << peak
             break
           else
             # Try again with one more worker.
-            print ", "  unless QUIET
             worker_count += 1
           end
         end
       end
 
-      puts
     end
 
-    things = []
-    peaks.each do |queue, array|
+    results = peaks.map do |queue, array|
       sum    = array.inject(:+)
       avg    = sum / array.length
-      stddev = Math.sqrt(array.inject(0){|total, t| total + (t - avg)**2 } / (array.length - 1))
 
-      things << {queue: queue, max: array.max.round(1), sum: sum, avg: avg.round(1), stddev: stddev.round(1)}
+      [
+        {
+          key: 'max_jobs_per_second',
+          value: array.max.round(1)
+        },
+        {
+          key: 'average_jobs_per_second',
+          value: avg.round(1)
+        }
+      ]
+    end
 
-      puts "#{queue} jobs per second: avg = #{avg.round(1)}, max = #{array.max.round(1)}, min = #{array.min.round(1)}, stddev = #{stddev.round(1)}"
-    end
-    # response = Net::HTTP.post_form(uri, {message: "stopped"})
-    req = Net::HTTP::Post.new(uri, initheader = {'Content-Type' =>'application/json'})
-    req.body = {total_time: "#{(Time.now - task_start).round(1)} seconds", results: things}.to_json
-    res = Net::HTTP.start(uri.hostname, uri.port) do |http|
-      http.request(req)
-    end
-    # puts
-    # puts "Total runtime: #{(Time.now - task_start).round(1)} seconds"
-    # response = Net::HTTP.post_form(uri, )
+    Bench.press(results.first)
   end
 end
